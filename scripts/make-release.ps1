@@ -119,7 +119,7 @@ if ($Publish) {
   Write-Host ''
   Write-Host "==> Creating DRAFT release $tag on GitHub" -ForegroundColor Cyan
   if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'gh (GitHub CLI) not found.' }
-  gh release create $tag $zip "$zip.sha256" --draft --title "W-INFO $tag" --notes-file $notes
+  gh release create $tag $zip "$zip.sha256" -R maczeo11/w-info --draft --title "w-info $tag" --notes-file $notes
   if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }
   Write-Host 'Draft created. It is private until you press Publish on the release page.' -ForegroundColor Green
 }
