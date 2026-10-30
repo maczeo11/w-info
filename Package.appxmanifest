@@ -11,7 +11,7 @@
     Publisher CN must character-for-character match the signing certificate
     subject used by scripts/pack.ps1. Changing one means changing both.
   -->
-  <Identity Name="TempFanWidget" Publisher="CN=TempFanWidget" Version="1.1.0.0" />
+  <Identity Name="TempFanWidget" Publisher="CN=TempFanWidget" Version="1.1.1.0" />
   <Properties>
     <DisplayName>Temp &amp; Fan Monitor</DisplayName>
     <PublisherDisplayName>TempFanWidget</PublisherDisplayName>
