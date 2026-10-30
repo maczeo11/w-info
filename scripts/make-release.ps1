@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Builds the GitHub release bundle: the signed app package plus installer scripts, in one zip.
 
@@ -37,7 +37,7 @@ $manifest = [xml](Get-Content (Join-Path $root 'Package.appxmanifest') -Raw)
 $name     = $manifest.Package.Identity.Name
 $version  = $manifest.Package.Identity.Version          # 1.0.0.0
 $tag      = 'v' + ($version -replace '\.0$', '')        # v1.0.0
-$stageName = "W-INFO-$tag-setup"
+$stageName = "w-info-$tag-setup"
 $stage    = Join-Path $dist $stageName
 $zip      = Join-Path $dist "$stageName.zip"
 
@@ -72,7 +72,7 @@ $zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash
 $certObj = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($cer)
 $notes = Join-Path $dist 'release-notes.md'
 @"
-## W-INFO $tag
+## w-info $tag
 
 Windows 11 widget for your **Widgets Board** (Win+W): CPU and GPU temperature, CPU load, network speed, fans.
 
