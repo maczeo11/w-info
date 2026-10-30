@@ -64,20 +64,21 @@ public sealed class LibreHardwareMonitorSource : ISensorSource
         var cpuTemps = new List<(string Name, double Value)>();
         var gpuTemps = new List<(string Name, double Value)>();
         var fans = new List<FanReading>();
+        double? cpuLoad = null;
 
         Walk(document.RootElement);
 
-        var cpuTemp = Pick(cpuTemps, "package", "tctl", "tdie");
+        var cpuTemp = Pick(cpuTemps, "package", "tctl", "tdie", "core", "cpu");
         var gpuTemp = Pick(gpuTemps, "core", "hot spot", "hotspot");
 
-        if (cpuTemp is null && gpuTemp is null && fans.Count == 0)
+        if (cpuTemp is null && gpuTemp is null && fans.Count == 0 && cpuLoad is null)
             return null;
 
         return new SensorSnapshot(
             CpuTemperatureC: cpuTemp,
             GpuTemperatureC: gpuTemp,
             Fans: fans,
-            CpuLoadPercent: null,
+            CpuLoadPercent: cpuLoad,
             SourceKind: SensorSourceKind.LibreHardwareMonitor,
             SourceDescription: "LibreHardwareMonitor",
             TimestampUtc: DateTimeOffset.UtcNow);
@@ -107,11 +108,32 @@ public sealed class LibreHardwareMonitorSource : ISensorSource
             switch (type)
             {
                 case "Temperature":
-                    if (id.StartsWith("/amdcpu/", StringComparison.Ordinal) ||
-                        id.StartsWith("/intelcpu/", StringComparison.Ordinal))
+                    if (id.StartsWith("/amdcpu/", StringComparison.OrdinalIgnoreCase) ||
+                        id.StartsWith("/intelcpu/", StringComparison.OrdinalIgnoreCase) ||
+                        id.Contains("/cpu/", StringComparison.OrdinalIgnoreCase) ||
+                        id.Contains("cpu", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("cpu", StringComparison.OrdinalIgnoreCase))
+                    {
                         cpuTemps.Add((name, value));
-                    else if (id.StartsWith("/gpu-", StringComparison.Ordinal))
+                    }
+                    else if (id.StartsWith("/gpu-", StringComparison.OrdinalIgnoreCase) ||
+                             id.Contains("/gpu/", StringComparison.OrdinalIgnoreCase) ||
+                             id.Contains("gpu", StringComparison.OrdinalIgnoreCase) ||
+                             name.Contains("gpu", StringComparison.OrdinalIgnoreCase))
+                    {
                         gpuTemps.Add((name, value));
+                    }
+                    break;
+
+                case "Load":
+                    if ((id.Contains("cpu", StringComparison.OrdinalIgnoreCase) ||
+                         id.StartsWith("/amdcpu/", StringComparison.OrdinalIgnoreCase) ||
+                         id.StartsWith("/intelcpu/", StringComparison.OrdinalIgnoreCase)) &&
+                        (name.Equals("CPU Total", StringComparison.OrdinalIgnoreCase) ||
+                         name.Contains("total", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        cpuLoad = Math.Clamp(value, 0, 100);
+                    }
                     break;
 
                 case "Fan" when value > 0:
@@ -144,7 +166,7 @@ public sealed class LibreHardwareMonitorSource : ISensorSource
 
     private static string FanLabel(string id, string raw)
     {
-        if (id.StartsWith("/gpu-", StringComparison.Ordinal)) return "GPU";
+        if (id.StartsWith("/gpu-", StringComparison.OrdinalIgnoreCase) || id.Contains("gpu", StringComparison.OrdinalIgnoreCase)) return "GPU";
 
         var lower = raw.ToLowerInvariant();
         if (lower.Contains("gpu")) return "GPU";

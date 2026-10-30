@@ -12,8 +12,9 @@ namespace TempFanWidget.Sensors;
 ///     figure Task Manager shows (falls back to <c>% Processor Time</c>, then
 ///     to WMI <c>Win32_PerfFormattedData_PerfOS_Processor</c>).
 ///   • CPU temp  — <c>Thermal Zone Information</c>, the ACPI thermal zones the
-///     firmware exposes. This is a coarse *system* temperature, not the die
-///     temperature, so it is the lowest-trust temperature in the app.
+///     firmware exposes (falls back to WMI <c>Win32_PerfFormattedData_Counters_ThermalZoneInformation</c>).
+///     This is a coarse *system* temperature, not the die temperature, so it is the lowest-trust
+///     temperature in the app.
 ///   • Network   — download / upload rate from the adapters' byte counters
 ///     (see <see cref="NetworkThroughput"/>).
 ///
@@ -54,6 +55,7 @@ public sealed class WindowsSystemSource : ISensorSource, IDisposable
     /// Reset to false whenever perf-counter recreation succeeds.
     /// </summary>
     private bool _useWmiLoad;
+    private bool _useWmiZone;
 
     public SensorSourceKind Kind => SensorSourceKind.WindowsSystem;
     public string DisplayName => "Windows";
@@ -148,8 +150,9 @@ public sealed class WindowsSystemSource : ISensorSource, IDisposable
                 "SELECT PercentProcessorTime FROM Win32_PerfFormattedData_PerfOS_Processor WHERE Name='_Total'");
             foreach (var obj in searcher.Get())
             {
-                if (obj["PercentProcessorTime"] is ulong pct)
-                    return Math.Clamp(pct, 0, 100);
+                var val = obj["PercentProcessorTime"];
+                if (val is not null)
+                    return Math.Clamp(Convert.ToDouble(val), 0, 100);
             }
             return null;
         }
@@ -167,13 +170,26 @@ public sealed class WindowsSystemSource : ISensorSource, IDisposable
 
     private double? ReadHottestZone()
     {
+        // If perf counters have been consistently broken, skip straight to WMI.
+        if (_useWmiZone)
+            return ReadHottestZoneWmi();
+
         // Back off after failures.
         if (_zones is null && DateTimeOffset.UtcNow < _zoneRetryAfter)
-            return null;
+            return ReadHottestZoneWmi();
 
         try
         {
             _zones ??= CreateZoneCounters();
+            if (_zones.Length == 0)
+            {
+                _zoneFailures++;
+                _zoneRetryAfter = DateTimeOffset.UtcNow + CounterRetryDelay;
+                if (_zoneFailures >= 3)
+                    _useWmiZone = true;
+
+                return ReadHottestZoneWmi();
+            }
 
             double? hottest = null;
             foreach (var zone in _zones)
@@ -185,7 +201,7 @@ public sealed class WindowsSystemSource : ISensorSource, IDisposable
                     hottest = Math.Max(hottest ?? double.MinValue, celsius);
             }
             _zoneFailures = 0;
-            return hottest;
+            return hottest ?? ReadHottestZoneWmi();
         }
         catch
         {
@@ -193,26 +209,87 @@ public sealed class WindowsSystemSource : ISensorSource, IDisposable
             _zones = null;
             _zoneFailures++;
             _zoneRetryAfter = DateTimeOffset.UtcNow + CounterRetryDelay;
+
+            if (_zoneFailures >= 3)
+                _useWmiZone = true;
+
+            return ReadHottestZoneWmi();
+        }
+    }
+
+    /// <summary>
+    /// WMI-based thermal zone fallback. Slower than a performance counter (~20–80 ms)
+    /// but works without administrator rights or registry permissions (such as inside
+    /// packaged MSIX / AppContainer / standard user contexts).
+    /// </summary>
+    private static double? ReadHottestZoneWmi()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT HighPrecisionTemperature, Temperature FROM Win32_PerfFormattedData_Counters_ThermalZoneInformation");
+            double? hottest = null;
+            foreach (var obj in searcher.Get())
+            {
+                double? kelvin = null;
+                var hpVal = obj["HighPrecisionTemperature"];
+                if (hpVal is not null)
+                {
+                    var val = Convert.ToDouble(hpVal);
+                    if (val > 0)
+                        kelvin = val / 10.0;
+                }
+
+                if (kelvin is null)
+                {
+                    var tVal = obj["Temperature"];
+                    if (tVal is not null)
+                    {
+                        var val = Convert.ToDouble(tVal);
+                        if (val > 0)
+                            kelvin = val;
+                    }
+                }
+
+                if (kelvin is not null)
+                {
+                    var celsius = kelvin.Value - 273.15;
+                    // Filter plausible CPU/thermal zone temperatures (0 to 125 °C)
+                    if (celsius is > 0 and < 125)
+                        hottest = Math.Max(hottest ?? double.MinValue, celsius);
+                }
+            }
+            return hottest;
+        }
+        catch
+        {
             return null;
         }
     }
 
     private PerformanceCounter[] CreateZoneCounters()
     {
-        if (!PerformanceCounterCategory.Exists(ThermalCategory))
+        try
+        {
+            if (!PerformanceCounterCategory.Exists(ThermalCategory))
+                return Array.Empty<PerformanceCounter>();
+
+            var instances = new PerformanceCounterCategory(ThermalCategory).GetInstanceNames();
+
+            // "High Precision Temperature" is in tenths of a Kelvin; the plain
+            // "Temperature" counter is whole Kelvin. Prefer the finer one.
+            var highPrecision = PerformanceCounterCategory.CounterExists("High Precision Temperature", ThermalCategory);
+            _zoneUnitsPerKelvin = highPrecision ? 10 : 1;
+            var counterName = highPrecision ? "High Precision Temperature" : "Temperature";
+
+            return instances
+                .Select(instance => new PerformanceCounter(ThermalCategory, counterName, instance, readOnly: true))
+                .ToArray();
+        }
+        catch
+        {
             return Array.Empty<PerformanceCounter>();
-
-        var instances = new PerformanceCounterCategory(ThermalCategory).GetInstanceNames();
-
-        // "High Precision Temperature" is in tenths of a Kelvin; the plain
-        // "Temperature" counter is whole Kelvin. Prefer the finer one.
-        var highPrecision = PerformanceCounterCategory.CounterExists("High Precision Temperature", ThermalCategory);
-        _zoneUnitsPerKelvin = highPrecision ? 10 : 1;
-        var counterName = highPrecision ? "High Precision Temperature" : "Temperature";
-
-        return instances
-            .Select(instance => new PerformanceCounter(ThermalCategory, counterName, instance, readOnly: true))
-            .ToArray();
+        }
     }
 
     private void DisposeZones()
