@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!--
+      WinExe: no console window flashes when the host COM-activates the exe.
+      There is deliberately no WinUI / XAML here — the widget renders inside
+      the Windows Widgets Board, so the app is a pure provider (see Program).
+    -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <!--
+      Ship the .NET runtime inside the package. Windows 11 does not include .NET 8,
+      and a framework-dependent build fails to start (blank widget, no error) on any
+      PC that doesn't happen to have it installed.
+    -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <!-- MSIX: run as a packaged app; the Widgets catalog only sees packages. -->
+    <WindowsPackageType>MSIX</WindowsPackageType>
+    <!-- Self-contained: ship the Windows App SDK runtime inside our MSIX so
+         users don't need the separate runtime installer. -->
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Widgets" Version="2.0.5" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.1" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="Package.appxmanifest" />
+  </ItemGroup>
+</Project>

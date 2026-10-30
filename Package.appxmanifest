@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+         xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+         xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap uap3 com desktop rescap">
+
+  <!--
+    Publisher CN must character-for-character match the signing certificate
+    subject used by scripts/pack.ps1. Changing one means changing both.
+  -->
+  <Identity Name="TempFanWidget" Publisher="CN=TempFanWidget" Version="1.1.0.0" />
+  <Properties>
+    <DisplayName>Temp &amp; Fan Monitor</DisplayName>
+    <PublisherDisplayName>TempFanWidget</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="TempFanWidget.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Temp &amp; Fan Monitor" Description="CPU/GPU temperature and fan speed widget"
+                          BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <!--
+          COM server: the host exec-launches TempFanWidget.exe with
+          -RegisterProcessAsComServer and CoCreates the class below. This CLSID
+          must equal the [Guid] on TempFanWidgetProvider (src/Widgets/).
+        -->
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer Executable="TempFanWidget.exe" Arguments="-RegisterProcessAsComServer" DisplayName="TempFanWidget">
+              <com:Class Id="F6EF3C98-9CBA-495E-853F-78C332113F2B" DisplayName="TempFanWidgetProvider" />
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+
+        <!--
+          Widget catalog: describes what appears in the Widgets Board picker.
+          The CreateInstance ClassId activates the exact COM class above.
+          Extension name is fixed by the platform — do not localize or shorten it.
+        -->
+        <uap3:Extension Category="windows.appExtension">
+          <uap3:AppExtension Name="com.microsoft.windows.widgets" DisplayName="Temp &amp; Fan" Id="TempFanWidget" PublicFolder="Assets">
+            <uap3:Properties>
+              <WidgetProvider>
+                <ProviderIcons>
+                  <Icon Path="StoreLogo.png" />
+                </ProviderIcons>
+                <Activation>
+                  <CreateInstance ClassId="F6EF3C98-9CBA-495E-853F-78C332113F2B" />
+                </Activation>
+                <Definitions>
+                  <Definition Id="TempFanWidget" DisplayName="Temp &amp; Fan" Description="CPU/GPU temperature and fan speeds"
+                             AllowMultiple="true">
+                    <Capabilities>
+                      <Capability>
+                        <Size Name="small" />
+                      </Capability>
+                      <Capability>
+                        <Size Name="medium" />
+                      </Capability>
+                      <Capability>
+                        <Size Name="large" />
+                      </Capability>
+                    </Capabilities>
+                    <ThemeResources>
+                      <Icons>
+                        <Icon Path="Square44x44Logo.png" />
+                      </Icons>
+                      <Screenshots>
+                        <Screenshot Path="Square150x150Logo.png" DisplayAltText="Temp and fan monitor widget preview" />
+                      </Screenshots>
+                    </ThemeResources>
+                  </Definition>
+                </Definitions>
+              </WidgetProvider>
+            </uap3:Properties>
+          </uap3:AppExtension>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- Full-trust is required for classic COM + kernel/hardware access. -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

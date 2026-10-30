@@ -1,0 +1,41 @@
+# Visual Studio
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+*.binlog
+
+# C# build outputs
+*.exe
+*.pdb
+*.dll
+*.lib
+*.obj
+
+# Windows AppSDK / MSIX packaging
+publish/
+dist/
+publish.pri-archive/
+package-logs/
+*.msix
+*.cer
+*.pfx
+
+# Rider
+.idea/
+
+# Test results
+TestResults/
+*.trx
+
+# OS
+Thumbs.db
+Desktop.ini
